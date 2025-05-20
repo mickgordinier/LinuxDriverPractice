@@ -13,25 +13,47 @@ MODULE_DESCRIPTION("First dynamically loadable kernel module");
 static struct proc_dir_entry *proc_entry;
 
 // Creating read function to handle file read system call
+// Parameters filled in by kernel
+// NOTE: FUNCTION IS REPEATEDLY CALLED UNTIL 0 IS RETURNED
 static ssize_t 
-mick_read(struct file* file_pointer, 
-	char *user_space_buffer, 
-	size_t count, 
-	loff_t* offset) 
+mick_read(
+	struct file* file,       // (ignored) Open proc file being read
+	char *user_space_buffer, // Where read data should be copies to (Fresh every call)
+	size_t count,            // (ignored) Specifies how many bytes user wants to read
+	loff_t* offset           // Internal offset value to keep track of msg idx
+) 
 {
+	// For kernel buffer debug
 	printk("mick_read\n");
 
 	// Sending msg from Kernel Space -> User Space
 	char msg[] = "Ack!\n";
 	size_t len = strlen(msg);
-	int result;
 
+	size_t bytesToRead = min(len - *offset, 1);
+
+	// Offset is initialized to 0 during cat calls
+	// Therefore, we want to copy over the entirity of msg by keeping track of offset
+	// >= is for partial reads
 	if (*offset >= len) return 0;
 
-	result = copy_to_user(user_space_buffer, msg, len);
-	*offset += len;
+	// Must safely copy data from kernel space --> user buffer space
+	// Cannot write directly to buffer as kernel/user spaces are seperate
+	// copy call is synchronous and will wait until all bytes are copied
+	if (copy_to_user(
+		user_space_buffer,  // buffer pointer is corrected each read() call
+		msg + *offset, 
+		bytesToRead) != 0) 
+	{
+		// returns # of bytes not copied
+		return -EFAULT;
+	}
 
-	return len;
+	// Internal to let driver know we have call read() once
+	*offset += bytesToRead;
+
+	// Informing user how many bytes were copied
+	return bytesToRead;
 }
 
 // Allow proc operation to use my custom function during syscalls

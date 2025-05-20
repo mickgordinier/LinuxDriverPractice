@@ -30,8 +30,8 @@ mick_read(
 	printk("mick_read\n");
 
 	// Sending msg from Kernel Space -> User Space
-	char msg[] = "Ack!\n";
-	size_t len = strlen(msg);
+	//char msg[] = "Ack!\n";
+	size_t len = strlen(kernel_buffer);
 
 	size_t bytesToRead = min(len - *offset, count);
 
@@ -45,7 +45,7 @@ mick_read(
 	// copy call is synchronous and will wait until all bytes are copied
 	if (copy_to_user(
 		user_space_buffer,  // buffer pointer is corrected each read() call
-		msg + *offset,
+		kernel_buffer + *offset,
 		bytesToRead) != 0)
 	{
 		// returns # of bytes not copied
